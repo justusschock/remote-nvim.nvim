@@ -682,17 +682,21 @@ end
 ---Launch remote neovim server
 function Provider:_launch_remote_neovim_server()
   if not self:is_remote_server_running() then
-    -- Find free port on remote
+    -- Find free port on remote (try default port first if configured)
+    local default_port = remote_nvim.config.ssh_config.default_port
     local free_port_on_remote_cmd = ("%s -l %s"):format(
       self:_remote_neovim_binary_path(),
       utils.path_join(self._remote_is_windows, self._remote_scripts_path, "free_port_finder.lua")
     )
+    if default_port then
+      free_port_on_remote_cmd = free_port_on_remote_cmd .. " " .. tostring(default_port)
+    end
     self:run_command(free_port_on_remote_cmd, "Searching for free port on the remote machine")
     local remote_free_port_output = self.executor:job_stdout()
     local remote_free_port = remote_free_port_output[#remote_free_port_output]
     self.logger.fmt_debug("[%s][%s] Remote free port: %s", self.provider_type, self.unique_host_id, remote_free_port)
 
-    self._local_free_port = provider_utils.find_free_port()
+    self._local_free_port = provider_utils.find_free_port_with_default(default_port)
     self.logger.fmt_debug(
       "[%s][%s] Local free port: %s",
       self.provider_type,

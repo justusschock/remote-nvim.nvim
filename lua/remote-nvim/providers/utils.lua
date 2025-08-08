@@ -83,6 +83,16 @@ function M.get_valid_neovim_versions()
   return valid_versions
 end
 
+---Check if a specific port is available on the local machine
+---@param port number Port to check
+---@return boolean available True if port is available, false otherwise
+local function is_port_available(port)
+  local socket = require("remote-nvim.utils").uv.new_tcp()
+  local success = socket:bind("127.0.0.1", port)
+  socket:close()
+  return success == 0
+end
+
 ---Get an ephemeral free port on the local machine
 ---@return string port A free ephemeral port available for TCP connections
 function M.find_free_port()
@@ -97,6 +107,19 @@ function M.find_free_port()
   end
 
   return tostring(result["port"])
+end
+
+---Find free port with optional default preference
+---@param default_port number? Preferred port to try first
+---@return string port A free port available for TCP connections
+function M.find_free_port_with_default(default_port)
+  -- If default port is provided and available, use it
+  if default_port and is_port_available(default_port) then
+    return tostring(default_port)
+  end
+  
+  -- Otherwise, fall back to ephemeral port
+  return M.find_free_port()
 end
 
 local function is_later_neovim_version(version1, version2)
