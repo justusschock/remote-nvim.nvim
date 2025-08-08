@@ -9,7 +9,7 @@ local function is_port_available(port)
 end
 
 -- Get default port from command line argument if provided
-local default_port = tonumber(arg and arg[1])
+local default_port = tonumber(vim.v.argv and vim.v.argv[#vim.v.argv] or nil)
 
 -- Try default port first if provided
 if default_port and is_port_available(default_port) then
@@ -17,11 +17,17 @@ if default_port and is_port_available(default_port) then
 else
   -- Fall back to ephemeral port
   local socket = uv.new_tcp()
-  socket:bind("127.0.0.1", 0)
-  local result = socket.getsockname(socket)
-  socket:close()
-
-  if result then
-    print(result["port"])
+  local success = socket:bind("127.0.0.1", 0)
+  if success == 0 then
+    local result = socket.getsockname(socket)
+    socket:close()
+    if result and result.port then
+      print(result.port)
+    else
+      print("0")
+    end
+  else
+    socket:close()
+    print("0")
   end
 end
