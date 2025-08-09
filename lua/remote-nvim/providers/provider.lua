@@ -694,6 +694,18 @@ function Provider:_launch_remote_neovim_server()
     self:run_command(free_port_on_remote_cmd, "Searching for free port on the remote machine")
     local remote_free_port_output = self.executor:job_stdout()
     local remote_free_port = remote_free_port_output[#remote_free_port_output]
+    
+    -- Clean and validate remote port
+    if remote_free_port then
+      remote_free_port = vim.trim(remote_free_port)
+    end
+    
+    -- Validate remote port and fallback if needed
+    if not remote_free_port or remote_free_port == "" or remote_free_port == "0" or not tonumber(remote_free_port) then
+      self.logger.fmt_warn("[%s][%s] Failed to get valid remote port ('%s'), using fallback", self.provider_type, self.unique_host_id, remote_free_port or "nil")
+      remote_free_port = tostring(default_port or 8080)
+    end
+    
     self.logger.fmt_debug("[%s][%s] Remote free port: %s", self.provider_type, self.unique_host_id, remote_free_port)
 
     self._local_free_port = provider_utils.find_free_port_with_default(default_port)
