@@ -708,7 +708,12 @@ function Provider:_launch_remote_neovim_server()
     
     self.logger.fmt_debug("[%s][%s] Remote free port: %s", self.provider_type, self.unique_host_id, remote_free_port)
 
-    self._local_free_port = provider_utils.find_free_port_with_default(default_port)
+    -- Use default port or find a free one
+    if default_port and default_port > 1024 and default_port < 65536 then
+      self._local_free_port = tostring(default_port)
+    else
+      self._local_free_port = provider_utils.find_free_port()
+    end
     self.logger.fmt_debug(
       "[%s][%s] Local free port: %s",
       self.provider_type,

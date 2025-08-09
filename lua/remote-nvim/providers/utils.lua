@@ -87,7 +87,16 @@ end
 ---@param port number Port to check
 ---@return boolean available True if port is available, false otherwise
 local function is_port_available(port)
+  -- Validate port range
+  if not port or port < 1024 or port > 65535 then
+    return false
+  end
+  
   local socket = require("remote-nvim.utils").uv.new_tcp()
+  if not socket then
+    return false
+  end
+  
   local success = socket:bind("127.0.0.1", port)
   socket:close()
   return success == 0
@@ -114,12 +123,22 @@ end
 ---@return string port A free port available for TCP connections
 function M.find_free_port_with_default(default_port)
   -- If default port is provided and available, use it
-  if default_port and is_port_available(default_port) then
-    return tostring(default_port)
+  if default_port and default_port > 1024 and default_port < 65536 then
+    -- Try the default port with timeout protection
+    local ok, available = pcall(is_port_available, default_port)
+    if ok and available then
+      return tostring(default_port)
+    end
   end
   
   -- Otherwise, fall back to ephemeral port
-  return M.find_free_port()
+  local ok, port = pcall(M.find_free_port)
+  if ok and port then
+    return port
+  end
+  
+  -- Last resort fallback
+  return "0"
 end
 
 local function is_later_neovim_version(version1, version2)
