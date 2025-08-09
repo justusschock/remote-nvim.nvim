@@ -796,26 +796,51 @@ function Provider:_wait_for_server_to_be_ready()
     self._local_free_port
   )
   local timeout = 20000 -- Wait for max 20 seconds for server to get ready
+  
+  self.logger.fmt_debug("[%s][%s] Waiting for server readiness with command: %s", self.provider_type, self.unique_host_id, cmd)
 
   local timer = utils.uv.new_timer()
   assert(timer ~= nil, "Timer object should not be nil")
 
   local co = coroutine.running()
   local function probe_server_readiness()
-    -- This is synchronous but that's fine because the command we are running should immediately return
-    local res = vim.fn.system(cmd)
-    if res == "" then
-      timer:stop()
-      timer:close()
-      if co ~= nil and coroutine.status(co) == "suspended" then
-        coroutine.resume(co)
+    -- Use timeout for the system command to prevent hanging
+    self.logger.fmt_debug("[%s][%s] Probing server readiness...", self.provider_type, self.unique_host_id)
+    local job_id = vim.fn.jobstart(cmd, {
+      stdout_buffered = true,
+      stderr_buffered = true,
+      on_exit = function(_, exit_code, _)
+        self.logger.fmt_debug("[%s][%s] Server probe exit code: %s", self.provider_type, self.unique_host_id, exit_code)
+        -- Server is ready if command succeeds (exit code 0)
+        if exit_code == 0 then
+          self.logger.fmt_debug("[%s][%s] Server is ready!", self.provider_type, self.unique_host_id)
+          timer:stop()
+          timer:close()
+          if co ~= nil and coroutine.status(co) == "suspended" then
+            coroutine.resume(co)
+          end
+        else
+          -- Server not ready yet, try again in 2 seconds
+          self.logger.fmt_debug("[%s][%s] Server not ready, retrying in 2s...", self.provider_type, self.unique_host_id)
+          vim.defer_fn(probe_server_readiness, 2000)
+          if co ~= nil and coroutine.status(co) == "running" then
+            coroutine.yield(co)
+          end
+        end
+      end,
+    })
+    
+    -- Kill job after 5 seconds if it hangs
+    vim.defer_fn(function()
+      if vim.fn.jobwait({job_id}, 0)[1] == -1 then
+        vim.fn.jobstop(job_id)
+        -- Try again after stopping the hanging job
+        vim.defer_fn(probe_server_readiness, 2000)
+        if co ~= nil and coroutine.status(co) == "running" then
+          coroutine.yield(co)
+        end
       end
-    else
-      vim.defer_fn(probe_server_readiness, 2000)
-      if co ~= nil and coroutine.status(co) == "running" then
-        coroutine.yield(co)
-      end
-    end
+    end, 5000)
   end
 
   -- Start the timer
